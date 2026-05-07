@@ -20,9 +20,21 @@ log_info()  { echo -e "${CYAN}[*]${NC} $1"; }
 log_step()  { echo -e "    ${CYAN}[>]${NC} $1"; }
 log_done()  { echo -e "    ${GREEN}[✓]${NC} $1"; }
 
-TARGET="${1:?Usage: $0 <target> [--quick]  (target = FQDN, IP, or CIDR)}"
+TARGET="${1:?Usage: $0 <target> [--quick]  (target = FQDN, IP, CIDR, or path to a file of domains/hosts)}"
 QUICK_MODE="${2:-}"
 BASE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Domain-list mode: if the target is a readable regular file, treat its
+# contents as a pre-resolved scope list (one host per line, # comments OK).
+# Useful for programs without wildcards where subdomain enum is wasted work.
+# Output dir is derived from the file basename so multiple lists don't collide.
+if [ -f "$TARGET" ] && [ -r "$TARGET" ]; then
+    TARGET_TYPE="list"
+    LIST_FILE="$TARGET"
+    TARGET="$(basename "$LIST_FILE")"
+    TARGET="${TARGET%.*}"
+fi
+
 RECON_DIR="${RECON_OUT_DIR:-$BASE_DIR/recon/$TARGET}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 THREADS=20
@@ -71,6 +83,39 @@ if [ "$TARGET_TYPE" = "ip" ] || [ "$TARGET_TYPE" = "cidr" ]; then
     SCOPE_LOCK=1
 fi
 
+# Resolve an absolute path to the *ProjectDiscovery* httpx, NOT the unrelated
+# Python httpx CLI which Brew installs at /opt/homebrew/bin/httpx and which
+# silently rejects PD flags like -silent / -tech-detect with "No such option"
+# — producing 0 live hosts on macs where Brew's bin precedes ~/go/bin on PATH
+# despite the export above.
+#
+# The PD binary's `-version` output contains the literal substring
+# "projectdiscovery"; the Python httpx CLI doesn't. Fall back to the bare
+# `httpx` token when no PD binary is found anywhere so the existing
+# command-not-found error path still fires with a clear message.
+_resolve_pd_httpx() {
+    local cand
+    for cand in \
+        "$HOME/go/bin/httpx" \
+        "/opt/homebrew/bin/httpx" \
+        "/usr/local/bin/httpx" \
+        "$(command -v httpx 2>/dev/null)"; do
+        [ -z "$cand" ] && continue
+        [ -x "$cand" ] || continue
+        if "$cand" -version 2>&1 | grep -qi "projectdiscovery"; then
+            echo "$cand"; return 0
+        fi
+    done
+    echo "httpx"
+    return 1
+}
+HTTPX_BIN="$(_resolve_pd_httpx || true)"
+if ! "$HTTPX_BIN" -version 2>&1 | grep -qi "projectdiscovery"; then
+    echo "[!] WARNING: ProjectDiscovery httpx not found on PATH. Live-host probing will fail." >&2
+    echo "    Install with:  GOBIN=\"\$HOME/go/bin\" go install github.com/projectdiscovery/httpx/cmd/httpx@latest" >&2
+fi
+export HTTPX_BIN
+
 mkdir -p "$RECON_DIR"/{subdomains,live,ports,urls,js,dirs,params}
 
 # Safety net: merge partial subdomain results on early exit (watchdog kill, etc.)
@@ -99,8 +144,23 @@ echo ""
 # ============================================================
 log_info "Phase 1: Subdomain Enumeration"
 
-# ── For IP / CIDR targets: skip subdomain tools, do host discovery instead ───
-if [ "$TARGET_TYPE" = "cidr" ]; then
+# ── For domain-list targets: load the file directly, skip enum entirely ───
+if [ "$TARGET_TYPE" = "list" ]; then
+    log_info "Domain-list target — loading $LIST_FILE (skipping subdomain enum)"
+    grep -vE '^[[:space:]]*(#|$)' "$LIST_FILE" \
+        | tr -d '\r' \
+        | tr '[:upper:]' '[:lower:]' \
+        | sed 's/^\*\.//' \
+        | awk 'NF' \
+        | sort -u > "$RECON_DIR/subdomains/all.txt"
+    LIST_COUNT=$(wc -l < "$RECON_DIR/subdomains/all.txt" 2>/dev/null || echo 0)
+    if [ "$LIST_COUNT" -eq 0 ]; then
+        log_err "Domain list $LIST_FILE has no usable entries — aborting"
+        exit 1
+    fi
+    log_ok "Loaded $LIST_COUNT host(s) from list"
+    SCOPE_LOCK=1
+elif [ "$TARGET_TYPE" = "cidr" ]; then
     log_info "CIDR target — running nmap ping sweep to discover live hosts"
     if command -v nmap &>/dev/null; then
         nmap -sn "$TARGET" -oG - 2>/dev/null \
@@ -183,9 +243,9 @@ fi  # end of domain-only subdomain enum block
 echo ""
 log_info "Phase 2: HTTP Probing"
 
-if command -v httpx &>/dev/null && [ -s "$RECON_DIR/subdomains/all.txt" ]; then
+if [ -x "$HTTPX_BIN" ] && [ -s "$RECON_DIR/subdomains/all.txt" ]; then
     log_step "Probing with httpx (status, title, tech, content-length)..."
-    httpx -l "$RECON_DIR/subdomains/all.txt" \
+    "$HTTPX_BIN" -l "$RECON_DIR/subdomains/all.txt" \
         -silent \
         -status-code \
         -title \
@@ -255,6 +315,18 @@ else
     curl -s "https://web.archive.org/cdx/search/cdx?url=*.$TARGET/*&output=text&fl=original&collapse=urlkey&limit=5000" \
         > "$RECON_DIR/urls/wayback.txt" 2>/dev/null || true
     log_done "wayback: $(wc -l < "$RECON_DIR/urls/wayback.txt" 2>/dev/null || echo 0) URLs"
+fi
+
+# katana — active crawl on live hosts (5 min cap prevents infinite crawl on
+# content-heavy sites like news/video portals)
+if command -v katana &>/dev/null && [ -s "$RECON_DIR/live/urls.txt" ]; then
+    log_step "Running katana (active crawl, 5min cap, top 50 hosts)..."
+    head -50 "$RECON_DIR/live/urls.txt" > "$RECON_DIR/urls/katana_targets.txt"
+    timeout 300 katana \
+        -list "$RECON_DIR/urls/katana_targets.txt" \
+        -d 3 -jc -kf all -silent \
+        -o "$RECON_DIR/urls/katana.txt" 2>/dev/null || true
+    log_done "katana: $(wc -l < "$RECON_DIR/urls/katana.txt" 2>/dev/null || echo 0) URLs"
 fi
 
 # Merge all collected URLs

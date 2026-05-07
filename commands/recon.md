@@ -10,10 +10,13 @@ Run the full recon pipeline on a target. **Always invoke the production script d
 
 ```
 /recon target.com
-/recon target.com --quick     (skip amass + reduce ffuf coverage)
-/recon 192.0.2.0/24           (CIDR target — skips subdomain enum, does host sweep)
-/recon 192.0.2.10             (single IP — skips subdomain enum)
+/recon target.com --quick        # skip amass + reduce ffuf coverage
+/recon 10.0.0.0/24               # CIDR — skips subdomain enum, runs nmap sweep
+/recon 192.0.2.10                # single IP — skips subdomain enum
+/recon path/to/scope.txt         # domain list — skips subdomain enum, uses file contents
 ```
+
+The domain-list form is for programs without wildcard scope: pre-resolved hosts go in a text file (one per line, `#` comments allowed) and recon jumps straight to live-host probing + URL crawl + nuclei against just those entries.
 
 ## What This Does (One Step)
 
