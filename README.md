@@ -5,7 +5,10 @@
 <h1 align="center">BugHunter</h1>
 
 <p align="center">
-  <b>AI-powered bug bounty hunting — recon to report, in your terminal.</b><br>
+  <b>AI-powered bug bounty hunting — recon to report, in your terminal.
+    CA:0x9D60Eab8166aa8dddD889a6F97104ce9DCbB2e77
+    </b><br>
+    
   <sub>Find vulnerabilities. Validate them. Get paid. No subscription required.</sub>
 </p>
 
@@ -115,8 +118,9 @@ bughunter v "finding"        # short alias for validate
 | **DeepSeek** | Very cheap ($0.001/1K tokens) | Cloud | Fast | [platform.deepseek.com](https://platform.deepseek.com) |
 | Claude API | Paid | Cloud | Fast | [console.anthropic.com](https://console.anthropic.com) |
 | OpenAI | Paid | Cloud | Fast | [platform.openai.com](https://platform.openai.com) |
+| **OpenRouter** | Subscription / pay-as-you-go | Cloud | Fast | [openrouter.ai/keys](https://openrouter.ai/keys) → get API key |
 
-BugHunter auto-detects providers in this order: **Ollama → Groq → DeepSeek → Claude → OpenAI**
+BugHunter auto-detects providers in this order: **Ollama → Groq → DeepSeek → … → OpenRouter → Claude → OpenAI**
 
 Switch providers anytime: `bughunter setup`
 
