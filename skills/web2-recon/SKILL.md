@@ -148,7 +148,7 @@ cat /tmp/urls.txt | gf rce | tee /tmp/rce-candidates.txt
 # rich-text editors, PDF generators). gf has no pattern for this — grep manually:
 cat /tmp/urls.txt | grep -iE "theme|profile|signature|customize|email|invoice|pdf|render|markdown" \
   | tee /tmp/css-injection-candidates.txt
-# → if any hit, run web2-vuln-classes section 22 (CSS Injection)
+# → if any hit, run web2-vuln-classes **CSS Injection**
 ```
 
 ---
@@ -282,7 +282,7 @@ curl -sI https://target.com | grep -iE "server|x-powered-by|x-aspnet|x-runtime|x
 | Laravel | Mass assignment ($fillable) | IDOR (Eloquent, no ownership) |
 | Express (Node.js) | Prototype pollution | Path traversal + debug surface (`/_debug`, `/__debug__`) → web2-vuln-classes "Error Disclosure / Debug Endpoints" |
 | Spring Boot | Actuator endpoints → web2-vuln-classes "Error Disclosure / Debug Endpoints" for full surface | SSTI (Thymeleaf) |
-| ASP.NET | ViewState deserialization (if encrypted, also test padding-oracle path → web2-vuln-classes section 23) | Open redirect (ReturnUrl) |
+| ASP.NET | ViewState deserialization (if encrypted, also test padding-oracle path → web2-vuln-classes **Padding Oracle & Crypto Misuse**) | Open redirect (ReturnUrl) |
 | Next.js | SSRF via Server Actions + `/_next/data/` / `/_next/static/chunks/` → web2-vuln-classes "Error Disclosure / Debug Endpoints" | Open redirect via redirect() |
 | GraphQL | Introspection → auth bypass on mutations | IDOR via node(id:) |
 | WordPress | Plugin SQLi | REST API auth bypass |
