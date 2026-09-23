@@ -6,10 +6,10 @@
     "name": "AwareXone",
     "url": "https://awarexone.com"
   },
-  "homepage": "https://github.com/Awarexone/Agentic-Bug-Hunter",
+  "homepage": "https://github.com/letztek/claude-bug-bounty",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Awarexone/Agentic-Bug-Hunter.git"
+    "url": "https://github.com/letztek/claude-bug-bounty.git"
   },
   "license": "MIT",
   "keywords": [

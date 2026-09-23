@@ -1211,7 +1211,7 @@ To use this as a Claude Code skill, copy this file to your skills directory:
 
 ```bash
 # Option A: Clone the repo and link the skill
-git clone https://github.com/Awarexone/Agentic-Bug-Hunter.git ~/.claude/skills/bug-bounty
+git clone https://github.com/letztek/claude-bug-bounty.git ~/.claude/skills/bug-bounty
 ln -s ~/.claude/skills/bug-bounty/SKILL.md ~/.claude/skills/bug-bounty/SKILL.md
 
 # Option B: Direct copy

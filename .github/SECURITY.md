@@ -12,9 +12,10 @@
 
 If you find a security issue in this toolkit itself (not a bug bounty finding on a third-party target), please **do not open a public GitHub issue**.
 
-**Email:** [shuvon@awarexone.com](mailto:shuvon@awarexone.com)  
-**CC / general:** [hello@awarexone.com](mailto:hello@awarexone.com)  
-**Subject line:** `[SECURITY] Brief description`
+**Report privately via GitHub Security Advisories:**
+[github.com/letztek/claude-bug-bounty/security/advisories/new](https://github.com/letztek/claude-bug-bounty/security/advisories/new)
+
+This is a fork of [shuvonsec/claude-bug-bounty](https://github.com/shuvonsec/claude-bug-bounty). If the issue is in upstream code rather than fork-specific changes, please also report it upstream.
 
 Include:
 - Description of the vulnerability

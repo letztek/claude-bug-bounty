@@ -1,12 +1,10 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/awarexone/Agentic-Bug-Hunter/main/assets/banner.png" alt="Agentic Bug Hunter - by AwareXone - AI-powered bug bounty reconnaissance and vulnerability discovery" width="100%"/>
+  <img src="assets/cli-banner.png" alt="BUGHUNTER — Bug Bounty Automation Pipeline" width="900"/>
 </p>
 
 <p align="center">
   <b>AI-powered bug bounty hunting — recon to report, in your terminal.
-    
-  Agentic Bug Hunter is now officially on robinhood.
-  CA:0xfc75c2651f96594e458a8ffe34a38fe2c3451b366 </b>
+</b>
   <br/>
   <a href="#what-is-this">What Is This</a>
   ·
@@ -28,13 +26,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Awarexone/Agentic-Bug-Hunter/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="MIT License"></a>
+  <a href="https://github.com/letztek/claude-bug-bounty/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/Python-3.10+-3776AB.svg?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+">
   <a href="https://pypi.org/project/agentic-bug-hunter/"><img src="https://img.shields.io/pypi/v/agentic-bug-hunter?style=flat-square&color=3775A9&logo=pypi&logoColor=white" alt="PyPI version"></a>
   <a href="https://pepy.tech/projects/agentic-bug-hunter"><img src="https://static.pepy.tech/personalized-badge/agentic-bug-hunter?period=total&units=international_system&left_color=black&right_color=green&left_text=downloads" alt="PyPI Downloads"></a>
   <a href="https://claude.ai/claude-code"><img src="https://img.shields.io/badge/Claude_Code-Plugin-D97706.svg?style=flat-square" alt="Claude Code Plugin"></a>
-  <a href="https://github.com/Awarexone/Agentic-Bug-Hunter/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/Awarexone/Agentic-Bug-Hunter/tests.yml?branch=main&style=flat-square&label=tests" alt="Tests"></a>
-  <a href="https://github.com/Awarexone/Agentic-Bug-Hunter/stargazers"><img src="https://img.shields.io/github/stars/Awarexone/Agentic-Bug-Hunter?style=flat-square&color=yellow" alt="GitHub Stars"></a>
+  <a href="https://github.com/letztek/claude-bug-bounty/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/Awarexone/Agentic-Bug-Hunter/tests.yml?branch=main&style=flat-square&label=tests" alt="Tests"></a>
+  <a href="https://github.com/letztek/claude-bug-bounty/stargazers"><img src="https://img.shields.io/github/stars/letztek/claude-bug-bounty?style=flat-square&color=yellow" alt="GitHub Stars"></a>
 </p>
 
 <p align="center">
@@ -166,7 +164,7 @@ Works as a [Claude Code](https://claude.ai/claude-code) plugin, or as a fully st
 Install once, use the `bughunter` command from any terminal on your machine:
 
 ```bash
-git clone https://github.com/Awarexone/Agentic-Bug-Hunter.git
+git clone https://github.com/letztek/claude-bug-bounty.git
 cd Agentic-Bug-Hunter
 ./install.sh --agent standalone
 ```
@@ -239,7 +237,7 @@ curl -fsSL https://ollama.ai/install.sh | sh
 ollama pull qwen2.5:14b          # ~9 GB, one-time download
 
 # 2. Install BugHunter
-git clone https://github.com/Awarexone/Agentic-Bug-Hunter.git
+git clone https://github.com/letztek/claude-bug-bounty.git
 cd Agentic-Bug-Hunter
 ./install.sh --agent standalone   # creates system-wide 'bughunter' command
 
@@ -297,7 +295,7 @@ bughunter hunt  target.com
 **Option A - standalone (no subscription, works for everyone)**
 
 ```bash
-git clone https://github.com/Awarexone/Agentic-Bug-Hunter.git
+git clone https://github.com/letztek/claude-bug-bounty.git
 cd Agentic-Bug-Hunter
 ./install.sh --agent standalone   # creates system-wide 'bughunter' command
 bughunter setup                   # pick a free AI provider
@@ -310,7 +308,7 @@ bughunter report
 **Option B - Claude Code plugin** *(requires Claude Code)*
 
 ```bash
-git clone https://github.com/Awarexone/Agentic-Bug-Hunter.git
+git clone https://github.com/letztek/claude-bug-bounty.git
 cd Agentic-Bug-Hunter
 chmod +x install_tools.sh && ./install_tools.sh   # subfinder · httpx · nuclei · katana · ffuf
 chmod +x install.sh      && ./install.sh          # skills + commands → ~/.claude/
@@ -329,7 +327,7 @@ claude
 Open your terminal, run `claude`, then paste:
 
 ```text
-Install the Claude Bug Bounty toolkit from https://github.com/Awarexone/Agentic-Bug-Hunter
+Install the Claude Bug Bounty toolkit from https://github.com/letztek/claude-bug-bounty
 into ~/tools/. Clone the repo, run ./install_tools.sh then ./install.sh.
 Verify /recon /hunt /validate /report are available.
 ```
@@ -351,7 +349,7 @@ bughunter mcp doctor
 bughunter mcp serve
 ```
 
-MCP is an adapter over the existing research engine — not a second scanner. Active tools require scope and explicit approval. See [docs/mcp.md](https://github.com/awarexone/Agentic-Bug-Hunter/blob/main/docs/mcp.md).
+MCP is an adapter over the existing research engine — not a second scanner. Active tools require scope and explicit approval. See [docs/mcp.md](https://github.com/letztek/claude-bug-bounty/blob/main/docs/mcp.md).
 
 ---
 
@@ -697,7 +695,7 @@ git push origin feature/your-contribution
 </table>
 
 <p align="center">
-  Using BugHunter in your team, program, or workflow? <b><a href="ADOPTERS.md">Add yourself</a></b> - a quick PR to <code>ADOPTERS.md</code>, or open an <a href="https://github.com/Awarexone/Agentic-Bug-Hunter/issues">issue</a>. Real, verifiable entries only.
+  Using BugHunter in your team, program, or workflow? <b><a href="ADOPTERS.md">Add yourself</a></b> - a quick PR to <code>ADOPTERS.md</code>, or open an <a href="https://github.com/letztek/claude-bug-bounty/issues">issue</a>. Real, verifiable entries only.
 </p>
 
 ---
@@ -705,13 +703,6 @@ git push origin feature/your-contribution
 ## Support This Project
 
 If BugHunter helps your hunts, you can fuel more of them — every contribution helps build more open-source security tools.
-
-### Crypto Donations
-
-| | Address |
-|:---|:---|
-| **Bitcoin (BTC)** | `1GXwGqmLcnbZWgVNskUAZyw2cmqenkUFNY` |
-| **Solana (SOL)** | `4ArkPu1E7tkrt3d5X84grWzF1xjuLpScgGEy12Bp2cmE` |
 
 <p align="center">
   <a href="https://www.buymeacoffee.com/shuvonsec">
@@ -951,7 +942,7 @@ Building apps with AI? Pair BugHunter with **[AXguard](https://github.com/Awarex
 </table>
 
 <p align="center">
-  <a href="https://github.com/Awarexone/Agentic-Bug-Hunter/graphs/contributors"><img src="https://img.shields.io/github/contributors/Awarexone/Agentic-Bug-Hunter?style=for-the-badge&color=7F55FF&label=contributors" alt="Contributors"/></a>
+  <a href="https://github.com/letztek/claude-bug-bounty/graphs/contributors"><img src="https://img.shields.io/github/contributors/letztek/claude-bug-bounty?style=for-the-badge&color=7F55FF&label=contributors" alt="Contributors"/></a>
   <a href="#contributing"><img src="https://img.shields.io/badge/+-Add_your_name-24292F?style=for-the-badge" alt="Contribute"/></a>
 </p>
 ---

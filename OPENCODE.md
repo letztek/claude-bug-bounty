@@ -19,7 +19,7 @@ You also need [OpenCode](https://opencode.ai) installed.
 ### Install
 
 ```bash
-git clone https://github.com/Awarexone/Agentic-Bug-Hunter.git
+git clone https://github.com/letztek/claude-bug-bounty.git
 cd Agentic-Bug-Hunter
 chmod +x install_tools.sh && ./install_tools.sh   # scanning tools
 chmod +x install.sh && ./install.sh --opencode    # skills + commands
