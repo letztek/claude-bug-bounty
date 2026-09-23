@@ -9,13 +9,14 @@ SETUP_BURP="ask"
 
 usage() {
     cat <<'EOF'
-Usage: ./install.sh [--agent claude|opencode|pi|codex|agents|standalone|all] [--global|--project]
+Usage: ./install.sh [--agent claude|opencode|pi|codex|agents|standalone|mcp|all] [--global|--project]
 
 Defaults:
   ./install.sh                    Install for Claude Code globally
 
 Standalone (no subscription needed):
   ./install.sh --agent standalone Install or update the 'bughunter' system command
+  ./install.sh --agent mcp        Print MCP client config + install mcp Python SDK hint
                                   After install, type from anywhere:
                                     bughunter help
                                     bughunter setup
@@ -238,7 +239,7 @@ install_standalone() {
     local repo_dir engine existing_cmd bin_dir target action
     local -a install_cmd
     repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    engine="$repo_dir/engine.py"
+    engine="$repo_dir/bughunter/engine.py"
 
     # Make engine.py executable
     chmod +x "$engine"
@@ -280,8 +281,10 @@ install_standalone() {
         fi
     fi
 
-    "${install_cmd[@]}" mkdir -p "$bin_dir"
-    "${install_cmd[@]}" ln -sfn "$engine" "$target"
+    # bash 3.2 (macOS default) aborts under set -u when expanding an empty array
+    # as "${install_cmd[@]}" — same idiom as tools/_auth_helper.sh.
+    ${install_cmd[@]+"${install_cmd[@]}"} mkdir -p "$bin_dir"
+    ${install_cmd[@]+"${install_cmd[@]}"} ln -sfn "$engine" "$target"
 
     if [ -L "$target" ] && [ "$(readlink "$target")" = "$engine" ]; then
         echo "[+] $action: $target -> $engine"
@@ -338,10 +341,43 @@ install_standalone() {
     echo ""
 }
 
+install_mcp() {
+    echo "════════════════════════════════════════════════════"
+    echo "  Agentic-Bug-Hunter MCP"
+    echo "════════════════════════════════════════════════════"
+    echo ""
+    echo "Server entry:"
+    echo "  python3 bughunter/mcp/bughunter-mcp/server.py"
+    echo "  # or: bughunter mcp serve   (after standalone install)"
+    echo ""
+    echo "Doctor / tool catalog:"
+    echo "  bughunter mcp doctor"
+    echo "  bughunter mcp tools"
+    echo ""
+    echo "Python SDK:"
+    echo "  pip install 'mcp>=1.28'"
+    echo ""
+    echo "Claude Code — merge bughunter/mcp/bughunter-mcp/claude-config.json into ~/.claude/settings.json mcpServers"
+    echo "OpenCode   — merge bughunter/mcp/bughunter-mcp/opencode-config.json into opencode mcp config"
+    echo ""
+    echo "Active tools require scope_domains + approve=true (or BBHUNT_MCP_APPROVE=1)."
+    echo "Existing Burp / Caido / HackerOne integrations are unchanged."
+    echo ""
+    if [ "${BBHUNT_SKIP_DEPS:-0}" != "1" ] && command -v pip3 &>/dev/null; then
+        echo "Installing mcp SDK (optional)..."
+        pip3 install --quiet 'mcp>=1.28' 2>/dev/null || echo "[!] pip install mcp failed — install manually"
+    fi
+    echo "Done."
+}
+
 case "$AGENT" in
     standalone|engine)
         SETUP_BURP="no"
         install_standalone
+        ;;
+    mcp)
+        SETUP_BURP="no"
+        install_mcp
         ;;
     claude)
         install_claude
@@ -369,6 +405,7 @@ case "$AGENT" in
         install_pi
         install_codex
         install_agents
+        install_mcp
         ;;
     *)
         echo "Unsupported agent: $AGENT" >&2

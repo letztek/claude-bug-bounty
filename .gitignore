@@ -14,7 +14,7 @@ api_keys.txt
 .private/
 
 # Nested local clones / sub-repos (not tracked)
-claude-bug-bounty/
+Agentic-Bug-Hunter/
 
 # Local reference material (slides, notes, images)
 waf-bypass/
@@ -73,3 +73,19 @@ WebSecurityTestingGuide/
 # hey.bild.de session creds (never commit)
 recon/bild.de/.hey-auth
 recon/bild.de/hey-results/
+
+# Python packaging artifacts (upstream v6.0.0 pip distribution)
+dist/
+build/
+
+# Hunt memory data — new bughunter/ package layout (v6.0.0 restructure)
+bughunter/memory/journal.jsonl
+bughunter/memory/patterns.jsonl
+bughunter/memory/audit.jsonl
+bughunter/memory/targets/
+bughunter/memory/leads/
+
+# Target-specific hunt scripts — new bughunter/ package layout
+bughunter/tools/dcard_*
+bughunter/tools/optus_*
+bughunter/tools/taipower_*
