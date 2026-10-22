@@ -19,16 +19,28 @@ Agentic-Bug-Hunter/
 # Local reference material (slides, notes, images)
 waf-bypass/
 
+# Local control sockets (short paths for AF_UNIX)
+.ctl/
+
+# Relocatable engine assembled by scripts/bundle-engine.sh
+desktop/src-tauri/resources/engine/**
+!desktop/src-tauri/resources/engine/README.md
+
 # Python
 __pycache__/
 *.py[cod]
 .venv/
+.venv-*/
 venv/
 *.egg-info/
 
 # macOS
 .DS_Store
 .AppleDouble
+*.p12
+*.cer
+*.p8
+AuthKey_*.p8
 
 # Logs
 *.log
@@ -75,6 +87,9 @@ recon/bild.de/.hey-auth
 recon/bild.de/hey-results/
 
 # Python packaging artifacts (upstream v6.0.0 pip distribution)
+
+# Runtime lead-board ledgers (per-target, regenerated on each hunt)
+memory/leads/
 dist/
 build/
 

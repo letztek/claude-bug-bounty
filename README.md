@@ -3,8 +3,7 @@
 </p>
 
 <p align="center">
-  <b>AI-powered bug bounty hunting — recon to report, in your terminal.
-</b>
+  <b>AI-powered bug bounty hunting — recon to report, in your terminal.</b>
   <br/>
   <a href="#what-is-this">What Is This</a>
   ·
@@ -40,7 +39,7 @@
 </p>
 
 <p align="center">
-  Built and maintained by <b>AwareXone</b> · <a href="https://www.awarexone.com">Website</a> · <a href="https://x.com/awarexone">X</a> · <a href="https://github.com/Awarexone">GitHub</a>
+  Built and maintained by <b>AwareXone</b> · <a href="https://www.awarexone.com">Website</a> · <a href="https://x.com/shuvonsecc">X</a> · <a href="https://github.com/Awarexone">GitHub</a>
 </p>
 
 <p align="center">
@@ -54,19 +53,19 @@
 </p>
 
 <p align="center">
-  <a href="https://fluxionai.world/register?source=github&campaign=github-awarexone&promo=AWAREXONE">
-    <img src="https://raw.githubusercontent.com/awarexone/Agentic-Bug-Hunter/main/assets/fluxion-partner-banner.jpg" alt="Fluxion AI — One gateway to the world's leading AI models" width="720"/>
+  <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentic-bug-hunter&promo=SDRBUGHUNTER">
+    <img src="https://raw.githubusercontent.com/awarexone/Agentic-Bug-Hunter/main/assets/sidrune-partner-banner.png" alt="Sidrune AI — One API for GPT, Claude, and other leading AI models" width="720"/>
   </a>
 </p>
 
 <p align="center">
-  <b>One gateway to the world's leading AI models</b><br/>
-  <sub>AI model access &amp; operations · partner for BugHunter standalone mode</sub>
+  <b>One API for GPT, Claude, and other leading AI models</b><br/>
+  <sub>Sign up and get $3 in API credit · partner for BugHunter standalone mode</sub>
 </p>
 
 <p align="center">
-  <a href="https://fluxionai.world/register?source=github&campaign=github-awarexone&promo=AWAREXONE"><b>Register with partner link →</b></a>
-  · promo <code>AWAREXONE</code>
+  <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentic-bug-hunter&promo=SDRBUGHUNTER"><b>Register with partner link →</b></a>
+  · promo <code>SDRBUGHUNTER</code>
   · <a href="https://docs.fluxionai.world/user-guide/help-center">Docs</a>
   · <a href="https://fluxionai.world/model-plaza">Model Plaza</a>
 </p>
@@ -211,10 +210,11 @@ bughunter v "finding"        # short alias for validate
 | **Grok (xAI)** | Paid | Cloud | Fast | [console.x.ai](https://console.x.ai) → `grok-4.5` |
 | **OpenRouter** | Subscription / pay-as-you-go | Cloud | Fast | [openrouter.ai/keys](https://openrouter.ai/keys) → get API key |
 | **OrcaRouter** | Subscription / pay-as-you-go | Cloud | Fast | [orcarouter.ai](https://www.orcarouter.ai) → get API key |
-| **Fluxion** | Subscription / pay-as-you-go | Cloud | Fast | [fluxionai.world](https://fluxionai.world/register?source=github&campaign=github-awarexone&promo=AWAREXONE) → get API key · [docs](https://docs.fluxionai.world/user-guide/help-center) · [Model Plaza](https://fluxionai.world/model-plaza) |
+| **Sidrune AI** | Subscription / pay-as-you-go | Cloud | Fast | [sidrune.ai](https://fluxionai.space/register?source=github&campaign=github-sidrune-agentic-bug-hunter&promo=SDRBUGHUNTER) → get API key · [docs](https://docs.fluxionai.world/user-guide/help-center) · [Model Plaza](https://fluxionai.world/model-plaza) |
 | **LiteLLM** | Uses your existing provider keys | Cloud / self-hosted proxy | Fast | [docs.litellm.ai](https://docs.litellm.ai) → one gateway for 100+ models |
+| **Requesty** | Pay-as-you-go | Cloud | Fast | [app.requesty.ai/api-keys](https://app.requesty.ai/api-keys) → get API key · [docs](https://docs.requesty.ai) |
 
-BugHunter auto-detects providers in this order: **Ollama → Groq → DeepSeek → … → OrcaRouter → OpenRouter → Fluxion → Claude → OpenAI**. LiteLLM is opt-in (selected explicitly or when `LITELLM_API_KEY` is set) so it never preempts a provider you already configured.
+BugHunter auto-detects providers in this order: **Ollama → Groq → DeepSeek → … → OrcaRouter → OpenRouter → Sidrune AI → Claude → OpenAI**. LiteLLM is opt-in (selected explicitly or when `LITELLM_API_KEY` is set) so it never preempts a provider you already configured. Requesty is opt-in the same way (selected explicitly or when `REQUESTY_API_KEY` is set); set `REQUESTY_BASE_URL=https://router.eu.requesty.ai/v1` to route through the EU region.
 
 Switch providers or choose an installed Ollama model anytime: `bughunter setup`.
 The setup can also be fully non-interactive:
@@ -255,13 +255,13 @@ bughunter setup       # choose Groq
 bughunter hunt target.com
 ```
 
-### Fluxion setup (multi-model gateway)
+### Sidrune AI setup (multi-model gateway)
 
-Fluxion is an optional OpenAI-compatible gateway (`https://fluxionai.world/v1`). It is **not** the default provider — pick it in `bughunter setup`, or set `BRAIN_PROVIDER=fluxion` when you want it.
+Sidrune AI is an optional OpenAI-compatible gateway (`https://fluxionai.world/v1`). It is **not** the default provider — pick it in `bughunter setup`, or set `BRAIN_PROVIDER=fluxion` when you want it.
 
 ```bash
 # 1. Register (AwareXone partner link) and create an API key
-#    https://fluxionai.world/register?source=github&campaign=github-awarexone&promo=AWAREXONE
+#    https://fluxionai.space/register?source=github&campaign=github-sidrune-agentic-bug-hunter&promo=SDRBUGHUNTER
 #    Docs: https://docs.fluxionai.world/user-guide/help-center
 #    Models: https://fluxionai.world/model-plaza
 
@@ -343,7 +343,7 @@ AI Agent → Agentic-Bug-Hunter MCP → Scope → Recon → Hunt → Validate �
 ```
 
 ```bash
-pip install 'mcp>=1.28'
+pip install 'mcp>=2.2.0'
 ./install.sh --agent mcp
 bughunter mcp doctor
 bughunter mcp serve
@@ -677,84 +677,6 @@ git push origin feature/your-contribution
 <p align="center"><i>Teams and researchers running BugHunter in their workflow.</i></p>
 
 <table align="center">
-  <tr>
-    <td align="center" width="200">
-      <a href="https://awarexone.com">
-        <img src="https://raw.githubusercontent.com/awarexone/Agentic-Bug-Hunter/main/assets/awarexone-logo.webp" alt="AwareXone" width="72"/>
-        <br/><b>AwareXone</b>
-      </a>
-      <br/><sub>AI agent vs. scams &amp; fraud</sub>
-    </td>
-    <td align="center" width="200">
-      <a href="ADOPTERS.md">
-        <img src="https://img.shields.io/badge/+-Add_your_team-7F55FF?style=for-the-badge" alt="Add your team"/>
-      </a>
-      <br/><sub>Open a one-line PR</sub>
-    </td>
-  </tr>
-</table>
-
-<p align="center">
-  Using BugHunter in your team, program, or workflow? <b><a href="ADOPTERS.md">Add yourself</a></b> - a quick PR to <code>ADOPTERS.md</code>, or open an <a href="https://github.com/letztek/claude-bug-bounty/issues">issue</a>. Real, verifiable entries only.
-</p>
-
----
-
-## Support This Project
-
-If BugHunter helps your hunts, you can fuel more of them — every contribution helps build more open-source security tools.
-
-<p align="center">
-  <a href="https://www.buymeacoffee.com/shuvonsec">
-    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50"/>
-  </a>
-</p>
-
-### Sponsorship
-
-<p align="center">
-  <a href="https://github.com/sponsors/awarexone">
-    <img src="https://img.shields.io/badge/Sponsor_AwareXone-ea4aaa?style=for-the-badge&logo=github&logoColor=white" alt="Sponsor awarexone on GitHub"/>
-  </a>
-</p>
-
-We're open to sponsors. Sponsoring funds new features and keeps the standalone mode free for everyone, and gets your logo and a link right here in the README, plus a credit in every release.
-
-Want to sponsor? Use [GitHub Sponsors](https://github.com/sponsors/awarexone), or reach out at [AwareXone.com](https://awarexone.com) / [b2b@awarexone.com](mailto:b2b@awarexone.com).
-
-AI model access partner: **[Fluxion AI](https://fluxionai.world/register?source=github&campaign=github-awarexone&promo=AWAREXONE)** — [docs](https://docs.fluxionai.world/user-guide/help-center) · [Model Plaza](https://fluxionai.world/model-plaza).
-
-### AwareXone
-
-BugHunter is built and maintained by [AwareXone](https://awarexone.com). Beyond open-source tools like this one, AwareXone builds AI-driven defenses against scams, fraud, and social engineering, and offers social engineering defense and human risk consultancy for organizations. If that's something your team needs, [get in touch](https://awarexone.com).
-
----
-
-## More from AwareXone
-
-Building apps with AI? Pair BugHunter with **[AXguard](https://github.com/Awarexone/AXguard)** — scan and fix common security issues in vibe-coded apps before you ship.
-
-<p align="center">
-  <a href="https://github.com/Awarexone/AXguard">
-    <img src="https://raw.githubusercontent.com/Awarexone/AXguard/main/assets/cover.jpg" alt="AXguard by AwareXone" width="720"/>
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/Awarexone/AXguard"><b>View AXguard on GitHub →</b></a>
-  ·
-  <a href="mailto:hello@awarexone.com">hello@awarexone.com</a>
-</p>
-
----
-
-## Thanks
-
-<p align="center">
-  <b>29 people</b> have contributed to BugHunter. Click any avatar to open their GitHub profile.
-</p>
-
-<table align="center">
     <tr>
       <td align="center" width="110">
         <a href="https://github.com/shuvonsec">
@@ -763,9 +685,9 @@ Building apps with AI? Pair BugHunter with **[AXguard](https://github.com/Awarex
         </a>
       </td>
       <td align="center" width="110">
-        <a href="https://github.com/shuv0n">
-          <img src="https://github.com/shuv0n.png?size=128" width="64" height="64" alt="shuv0n"/>
-          <br/><sub><b>shuv0n</b></sub>
+        <a href="https://github.com/awarexonedev">
+          <img src="https://github.com/awarexonedev.png?size=128" width="64" height="64" alt="awarexonedev"/>
+          <br/><sub><b>awarexonedev</b></sub>
         </a>
       </td>
       <td align="center" width="110">
@@ -787,13 +709,25 @@ Building apps with AI? Pair BugHunter with **[AXguard](https://github.com/Awarex
         </a>
       </td>
       <td align="center" width="110">
+        <a href="https://github.com/indraoverflow">
+          <img src="https://github.com/indraoverflow.png?size=128" width="64" height="64" alt="indraoverflow"/>
+          <br/><sub><b>indraoverflow</b></sub>
+        </a>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" width="110">
         <a href="https://github.com/DebasishTripathy13">
           <img src="https://github.com/DebasishTripathy13.png?size=128" width="64" height="64" alt="DebasishTripathy13"/>
           <br/><sub><b>DebasishTripathy13</b></sub>
         </a>
       </td>
-    </tr>
-    <tr>
+      <td align="center" width="110">
+        <a href="https://github.com/shivsin25">
+          <img src="https://github.com/shivsin25.png?size=128" width="64" height="64" alt="shivsin25"/>
+          <br/><sub><b>shivsin25</b></sub>
+        </a>
+      </td>
       <td align="center" width="110">
         <a href="https://github.com/adityaax">
           <img src="https://github.com/adityaax.png?size=128" width="64" height="64" alt="adityaax"/>
@@ -818,10 +752,24 @@ Building apps with AI? Pair BugHunter with **[AXguard](https://github.com/Awarex
           <br/><sub><b>ultra-supara</b></sub>
         </a>
       </td>
+    </tr>
+    <tr>
+      <td align="center" width="110">
+        <a href="https://github.com/Amine-Genin">
+          <img src="https://github.com/Amine-Genin.png?size=128" width="64" height="64" alt="Amine-Genin"/>
+          <br/><sub><b>Amine-Genin</b></sub>
+        </a>
+      </td>
       <td align="center" width="110">
         <a href="https://github.com/AurisDSP">
           <img src="https://github.com/AurisDSP.png?size=128" width="64" height="64" alt="AurisDSP"/>
           <br/><sub><b>AurisDSP</b></sub>
+        </a>
+      </td>
+      <td align="center" width="110">
+        <a href="https://github.com/Biruk121">
+          <img src="https://github.com/Biruk121.png?size=128" width="64" height="64" alt="Biruk121"/>
+          <br/><sub><b>Biruk121</b></sub>
         </a>
       </td>
       <td align="center" width="110">
@@ -830,8 +778,6 @@ Building apps with AI? Pair BugHunter with **[AXguard](https://github.com/Awarex
           <br/><sub><b>Edneam</b></sub>
         </a>
       </td>
-    </tr>
-    <tr>
       <td align="center" width="110">
         <a href="https://github.com/depapp">
           <img src="https://github.com/depapp.png?size=128" width="64" height="64" alt="depapp"/>
@@ -844,6 +790,8 @@ Building apps with AI? Pair BugHunter with **[AXguard](https://github.com/Awarex
           <br/><sub><b>Realgagenichols</b></sub>
         </a>
       </td>
+    </tr>
+    <tr>
       <td align="center" width="110">
         <a href="https://github.com/H4d3es">
           <img src="https://github.com/H4d3es.png?size=128" width="64" height="64" alt="H4d3es"/>
@@ -868,8 +816,6 @@ Building apps with AI? Pair BugHunter with **[AXguard](https://github.com/Awarex
           <br/><sub><b>savioruz</b></sub>
         </a>
       </td>
-    </tr>
-    <tr>
       <td align="center" width="110">
         <a href="https://github.com/Marc-oss-hub">
           <img src="https://github.com/Marc-oss-hub.png?size=128" width="64" height="64" alt="Marc-oss-hub"/>
@@ -882,6 +828,8 @@ Building apps with AI? Pair BugHunter with **[AXguard](https://github.com/Awarex
           <br/><sub><b>Paebak</b></sub>
         </a>
       </td>
+    </tr>
+    <tr>
       <td align="center" width="110">
         <a href="https://github.com/NaorYaacov">
           <img src="https://github.com/NaorYaacov.png?size=128" width="64" height="64" alt="NaorYaacov"/>
@@ -906,14 +854,20 @@ Building apps with AI? Pair BugHunter with **[AXguard](https://github.com/Awarex
           <br/><sub><b>prodmanpd</b></sub>
         </a>
       </td>
-    </tr>
-    <tr>
       <td align="center" width="110">
         <a href="https://github.com/SeekAndExploit">
           <img src="https://github.com/SeekAndExploit.png?size=128" width="64" height="64" alt="SeekAndExploit"/>
           <br/><sub><b>SeekAndExploit</b></sub>
         </a>
       </td>
+      <td align="center" width="110">
+        <a href="https://github.com/Thibaultjaigu">
+          <img src="https://github.com/Thibaultjaigu.png?size=128" width="64" height="64" alt="Thibaultjaigu"/>
+          <br/><sub><b>Thibaultjaigu</b></sub>
+        </a>
+      </td>
+    </tr>
+    <tr>
       <td align="center" width="110">
         <a href="https://github.com/Shawanga">
           <img src="https://github.com/Shawanga.png?size=128" width="64" height="64" alt="Shawanga"/>
@@ -924,6 +878,12 @@ Building apps with AI? Pair BugHunter with **[AXguard](https://github.com/Awarex
         <a href="https://github.com/zeze-zeze">
           <img src="https://github.com/zeze-zeze.png?size=128" width="64" height="64" alt="zeze-zeze"/>
           <br/><sub><b>zeze-zeze</b></sub>
+        </a>
+      </td>
+      <td align="center" width="110">
+        <a href="https://github.com/amanssj3">
+          <img src="https://github.com/amanssj3.png?size=128" width="64" height="64" alt="amanssj3"/>
+          <br/><sub><b>amanssj3</b></sub>
         </a>
       </td>
       <td align="center" width="110">
@@ -948,11 +908,9 @@ Building apps with AI? Pair BugHunter with **[AXguard](https://github.com/Awarex
 ---
 
 <p align="center">
-  <a href="https://github.com/shuvonsec">GitHub</a>
+  A fork of <a href="https://github.com/shuvonsec/claude-bug-bounty">shuvonsec/claude-bug-bounty</a>
   ·
-  <a href="https://x.com/awarexone">Twitter</a>
-  ·
-  <a href="mailto:hello@awarexone.com">hello@awarexone.com</a> · <a href="mailto:shuvon@awarexone.com">shuvon@awarexone.com</a><br>
+  <a href="https://github.com/letztek/claude-bug-bounty/issues">Issues</a><br>
   <b>Built by bug hunters, for bug hunters.</b><br>
   <sub>MIT License · For authorized security testing only. Always test within an approved bug bounty program scope.</sub>
 </p>

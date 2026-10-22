@@ -27,6 +27,10 @@ class AuditLog:
     ):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(self.path.parent, 0o700)  # hunt-memory is owner-only
+        except OSError:
+            pass
         self.max_bytes = max_bytes
         self.keep_backups = keep_backups
 
@@ -38,7 +42,9 @@ class AuditLog:
 
         rotate_if_needed(self.path, max_bytes=self.max_bytes, keep=self.keep_backups)
 
-        fd = os.open(str(self.path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+        # 0o600: the audit log records request URLs, which can carry tokens in
+        # the query string — keep it owner-only, not world-readable.
+        fd = os.open(str(self.path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX)
             try:
@@ -288,16 +294,27 @@ class AutopilotGuard:
 
     @staticmethod
     def _extract_host(url: str) -> str:
-        """Extract host (with port) from a URL."""
-        # Strip scheme
-        if "://" in url:
-            url = url.split("://", 1)[1]
-        # Strip path
-        host = url.split("/", 1)[0]
-        # Strip userinfo
-        if "@" in host:
-            host = host.rsplit("@", 1)[1]
-        return host
+        """Extract host (with port) from a URL.
+
+        Delegates to the scope checker's canonical parser so the circuit
+        breaker keys on the exact same host the scope decision used — no
+        second, divergent parser. Falls back to a conservative manual parse
+        only if the canonical parser can't be imported or returns nothing.
+        """
+        try:
+            from tools.scope_checker import extract_host_port
+        except Exception:
+            # Fallback ONLY if the canonical parser can't be imported.
+            if "://" in url:
+                url = url.split("://", 1)[1]
+            host = url.split("/", 1)[0]
+            if "@" in host:
+                host = host.rsplit("@", 1)[1]
+            return host
+        # Canonical parser is authoritative: an empty result means the URL was
+        # malformed/ambiguous (e.g. a backslash host trick) and must NOT be
+        # re-parsed into a usable host by a looser fallback.
+        return extract_host_port(url)
 
     def check_request(self, method: str, url: str) -> dict:
         """Check whether a request should proceed.
@@ -309,15 +326,18 @@ class AutopilotGuard:
 
         # 0. Scope enforcement (HARD BLOCK, checked first).
         # An out-of-scope request must never be sent, regardless of method or
-        # host health. This is deliberately the first gate.
+        # host health. This is deliberately the first gate. explain() gives the
+        # matched rule + reason so the block is attributable (which rule, why).
         if self._scope_checker is not None:
-            if not self._scope_checker.is_in_scope(url):
+            verdict = self._scope_checker.explain(url)
+            if not verdict["in_scope"]:
                 return {
                     "decision": "block",
                     "method": method.upper(),
                     "url": url,
-                    "host": host,
-                    "reason": f"Out of scope: {host} is not on the program allowlist",
+                    "host": verdict.get("host") or host,
+                    "scope_rule": verdict.get("matched_rule"),
+                    "reason": f"Out of scope: {verdict['reason']}",
                 }
         elif self._fail_closed:
             return {

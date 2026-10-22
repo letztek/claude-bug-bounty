@@ -34,12 +34,107 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools.auth_session import AuthSession, add_cli_args, session_from_args  # noqa: E402
 from tools.banner import print_banner  # noqa: E402
+from tools.scope_checker import ScopeChecker, ScopeError  # noqa: E402
 
 # Process-wide AuthSession. Populated in main() once flags are parsed and
 # read by run_recon / run_vuln_scan so every subprocess inherits the same
 # session env vars. (Plain assignment — kept 3.9-compatible; the codebase
 # elsewhere uses 3.10+ union syntax but hunt.py historically did not.)
 _AUTH_SESSION = None
+
+# Process-wide scope enforcement for the DIRECT CLI path (python3 tools/hunt.py).
+# The agent path enforces scope in agent.ToolDispatcher and the MCP path in its
+# adapters; this closes the third entrypoint so a direct CLI invocation can't
+# emit out-of-scope traffic. It uses the SAME ScopeChecker class — never a second
+# implementation. None means "no scope configured" (legacy behavior + a loud
+# warning); when set, out-of-scope base targets are refused before any subprocess
+# spawns and recon-discovered URL files are filtered before scanners read them.
+_SCOPE_CHECKER = None
+
+# Recon-output files later scanners read. Mirrors
+# agent.ToolDispatcher._filter_recon_urls_to_scope and the MCP adapters so all
+# three entrypoints filter the same set.
+_RECON_URL_RELPATHS = (
+    ("urls", "all.txt"),
+    ("urls", "with_params.txt"),
+    ("urls", "js_files.txt"),
+    ("urls", "api_endpoints.txt"),
+    ("urls", "graphql.txt"),
+    ("live", "urls.txt"),
+)
+
+
+def set_scope_checker(checker) -> None:
+    """Install the process-wide ScopeChecker for the direct CLI path."""
+    global _SCOPE_CHECKER
+    _SCOPE_CHECKER = checker
+
+
+def _scope_blocks_target(domain) -> bool:
+    """True if scope is configured and this base target is out of scope.
+
+    Fail-closed for every target type when a scope is configured:
+      - domain / single IP: checked directly against the allowlist.
+      - CIDR: every expanded host must be in scope, else refuse (a domain-only
+        scope therefore cannot authorize a CIDR sweep).
+      - list file: every entry must be in scope, else refuse.
+    """
+    if _SCOPE_CHECKER is None:
+        return False
+
+    ttype = detect_target_type(domain)
+
+    if ttype == "cidr":
+        try:
+            hosts = expand_cidr(domain)
+        except ValueError as exc:
+            log("err", f"BLOCKED: CIDR {domain} unusable under scope enforcement: {exc}")
+            return True
+        oos = [h for h in hosts if not _SCOPE_CHECKER.is_in_scope(f"https://{h}")]
+        if oos:
+            log("err", f"BLOCKED: {len(oos)}/{len(hosts)} host(s) in {domain} are out of "
+                       "scope — refusing (add matching IP/CIDR scope rules)")
+            return True
+        return False
+
+    if ttype == "list":
+        try:
+            with open(domain, "r", encoding="utf-8") as f:
+                entries = [ln.strip() for ln in f
+                           if ln.strip() and not ln.lstrip().startswith("#")]
+        except OSError as exc:
+            log("err", f"BLOCKED: cannot read target list {domain} under scope enforcement: {exc}")
+            return True
+        oos = [e for e in entries
+               if not _SCOPE_CHECKER.is_in_scope(e if "://" in e else f"https://{e}")]
+        if oos:
+            log("err", f"BLOCKED: {len(oos)}/{len(entries)} host(s) in list {domain} are out "
+                       "of scope — refusing")
+            return True
+        return False
+
+    candidate = domain if "://" in domain else f"https://{domain}"
+    if not _SCOPE_CHECKER.is_in_scope(candidate):
+        log("err", f"BLOCKED: {domain} is out of scope — refusing (scope enforcement on)")
+        return True
+    return False
+
+
+def _filter_recon_scope(domain) -> None:
+    """Drop out-of-scope URLs from recon files in place (no-op if scope unset)."""
+    if _SCOPE_CHECKER is None:
+        return
+    try:
+        recon_dir = _resolve_recon_dir(domain)
+    except ValueError:
+        return
+    for parts in _RECON_URL_RELPATHS:
+        f = os.path.join(recon_dir, *parts)
+        if os.path.isfile(f):
+            try:
+                _SCOPE_CHECKER.filter_file(f)
+            except OSError:
+                continue
 
 
 def _normalize_argv(argv):
@@ -55,18 +150,16 @@ def _normalize_argv(argv):
 MAX_CIDR_HOSTS = 254
 
 def detect_target_type(target: str) -> str:
-    """Return 'list', 'cidr', 'ip', or 'domain'.
+    """Return 'list', 'local', 'cidr', 'ip', or 'domain'.
 
-    'list' = path to a readable file of pre-resolved hosts (one per line).
-    Used for programs without wildcard scope where subdomain enum is wasted.
+    'list'  = path to a readable file of pre-resolved hosts (one per line).
+    'local' = loopback / RFC-1918 / *.local — no public subdomain enum.
+    Delegates to tools.target_normalize so the shell, engine.py and hunt.py all
+    classify a target identically (it normalizes scheme/port first, so
+    'http://10.0.0.5:3000/' is 'local', not 'domain').
     """
-    if os.path.isfile(target):
-        return "list"
-    try:
-        net = ipaddress.ip_network(target, strict=False)
-        return "cidr" if net.num_addresses > 1 else "ip"
-    except ValueError:
-        return "domain"
+    from tools.target_normalize import detect_target_type as _dtt
+    return _dtt(target)
 
 
 def expand_cidr(cidr: str, max_hosts: int = MAX_CIDR_HOSTS) -> list[str]:
@@ -112,6 +205,29 @@ def _validate_domain_for_path(domain: str) -> str:
     if not domain or "/" in domain or "\\" in domain or ".." in domain:
         raise ValueError(f"invalid domain for path resolution: {domain!r}")
     return domain
+
+
+# Characters that have meaning to /bin/sh. A target is a hostname, IP, CIDR,
+# or file path — none of these legitimately contain any of them. Rejecting the
+# set closes the command-injection gap in issue #153: user-controlled targets
+# flow into shell=True recon/scan/cve/zero-day/graphql/lead-board strings, and
+# $(), backticks, ;, |, & etc. were being evaluated by the shell.
+_TARGET_DENY = frozenset(" \t\r\n$`;|&<>(){}[]!*?~\"'\\")
+
+
+def _validate_target(target: str) -> str:
+    """Reject any target carrying shell metacharacters or whitespace before it
+    reaches a shell=True command string. Hostnames, IPs, CIDRs (`/`), and unix
+    file paths (`/`, `.`, `-`, `_`) all pass; injection payloads do not."""
+    if not target or len(target) > 255:
+        raise ValueError(f"invalid target: {target!r}")
+    bad = _TARGET_DENY & set(target)
+    if bad:
+        raise ValueError(
+            f"invalid target {target!r}: contains disallowed "
+            f"character(s) {''.join(sorted(bad))!r}"
+        )
+    return target
 
 
 def _resolve_recon_dir(domain: str) -> str:
@@ -179,16 +295,23 @@ def log(level, msg):
 
 
 def run_cmd(cmd, cwd=None, timeout=600):
-    """Run a shell command and return (success, output).
+    """Run a command and return (success, output).
+
+    `cmd` should be an argv LIST (executed with shell=False) whenever any part
+    is user/target-derived — that is injection-safe. A plain string is still
+    accepted (shell=True) for callers that need shell builtins like
+    `command -v` with fully hardcoded arguments; never pass interpolated
+    untrusted input as a string.
 
     Uses process groups (os.setsid) so that on timeout the entire child tree
     is killed via os.killpg, preventing orphan processes from accumulating
     during long-running hunts.
     """
+    use_shell = isinstance(cmd, str)
     proc = None
     try:
         proc = subprocess.Popen(
-            cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            cmd, shell=use_shell, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, cwd=cwd, preexec_fn=os.setsid,
         )
         stdout, _ = proc.communicate(timeout=timeout)
@@ -200,7 +323,7 @@ def run_cmd(cmd, cwd=None, timeout=600):
             except OSError:
                 proc.kill()
             proc.wait()
-        return False, f"Command timed out after {timeout}s: {cmd[:120]}"
+        return False, f"Command timed out after {timeout}s: {str(cmd)[:120]}"
     except Exception as e:
         if proc is not None:
             try:
@@ -268,7 +391,7 @@ def setup_wordlists():
             continue
 
         log("info", f"Downloading {name}...")
-        success, output = run_cmd(f'curl -sL "{url}" -o "{filepath}"')
+        success, output = run_cmd(["curl", "-sL", url, "-o", filepath])
         if success and os.path.getsize(filepath) > 100:
             lines = sum(1 for _ in open(filepath))
             log("ok", f"Downloaded {name} ({lines} entries)")
@@ -309,14 +432,16 @@ def select_targets(top_n=10):
 
 def run_recon(domain, quick=False, scope_lock=False):
     """Run recon engine on a domain, single IP, or CIDR range."""
+    if _scope_blocks_target(domain):
+        return False
     log("info", f"Running recon on {domain}...")
     script = os.path.join(TOOLS_DIR, "recon_engine.sh")
     quick_flag = "--quick" if quick else ""
 
     # Detect target type and pass to recon_engine.sh
     target_type = detect_target_type(domain)
-    if target_type in ("ip", "cidr", "list"):
-        scope_lock = True  # IPs/CIDRs/pre-resolved lists never need subdomain enum
+    if target_type in ("ip", "cidr", "list", "local"):
+        scope_lock = True  # IPs/CIDRs/lists/local hosts never need subdomain enum
         log("info", f"Target type: {target_type.upper()} — subdomain enum skipped")
         if target_type == "cidr":
             try:
@@ -340,24 +465,37 @@ def run_recon(domain, quick=False, scope_lock=False):
                 return False
             log("info", f"Domain list {domain} → {n} host(s) to scan")
 
-    scope_env  = "SCOPE_LOCK=1 " if scope_lock else ""
-    type_env   = f'TARGET_TYPE="{target_type}" '
-
-    # Inject auth env vars (if any) so the bash helper picks them up.
+    # Inject auth env vars (if any) so the bash helper picks them up. Config is
+    # passed through the environment, never interpolated into a shell string:
+    # `domain` is user-controlled, so a shell=True command with "{domain}" was a
+    # command-injection vector (e.g. domain = 'a";id;"'). Use an argv list with
+    # shell=False so the target can never break out into shell syntax.
     child_env = os.environ.copy()
+    child_env["TARGET_TYPE"] = target_type
+    if scope_lock:
+        child_env["SCOPE_LOCK"] = "1"
+    # When a ScopeChecker is configured, tell recon_engine.sh to run in
+    # scope-enforced mode: httpx must NOT follow redirects, so an in-scope host
+    # cannot 302 the probe onto an out-of-scope host (out-of-scope traffic = 0).
+    if _SCOPE_CHECKER is not None:
+        child_env["SCOPE_ENFORCED"] = "1"
     if _AUTH_SESSION is not None:
         _AUTH_SESSION.export_to_env(child_env)
         if not _AUTH_SESSION.is_empty():
             log("info", _AUTH_SESSION.describe())
 
+    cmd = ["bash", script, domain]
+    if quick_flag:
+        cmd.append(quick_flag)
+
     # Run with live output
     try:
-        proc = subprocess.Popen(
-            f'{scope_env}{type_env}bash "{script}" "{domain}" {quick_flag}',
-            shell=True, cwd=BASE_DIR, env=child_env,
-        )
+        proc = subprocess.Popen(cmd, shell=False, cwd=BASE_DIR, env=child_env)
         proc.wait(timeout=3600)  # 60 min timeout (CIDR ranges can be large)
-        return proc.returncode == 0
+        ok = proc.returncode == 0
+        # Filter recon-discovered URLs to scope before any scanner reads them.
+        _filter_recon_scope(domain)
+        return ok
     except subprocess.TimeoutExpired:
         proc.kill()
         log("err", f"Recon timed out for {domain}")
@@ -393,7 +531,7 @@ def ingest_lead_board(domain):
 
     log("info", f"Ingesting lead board for {domain}...")
     ok, out = run_cmd(
-        f'python3 "{script}" ingest "{domain}" --recon-dir "{recon_dir}"',
+        ["python3", script, "ingest", domain, "--recon-dir", recon_dir],
         timeout=120,
     )
     if out.strip():
@@ -402,11 +540,37 @@ def ingest_lead_board(domain):
         log("warn", f"lead_board ingest returned non-zero for {domain}")
         return False
 
-    ok2, out2 = run_cmd(f'python3 "{script}" next "{domain}"', timeout=30)
+    ok2, out2 = run_cmd(["python3", script, "next", domain], timeout=30)
     if out2.strip():
         log("info", "Top untouched lead:")
         print(out2.rstrip())
     return ok2
+
+
+def run_swarm(domain, workers=6):
+    """Fan out parallel ephemeral verifiers over the lead board.
+
+    Each worker claims one untouched lead and runs the deterministic verifier
+    gate; a lead is only marked VERIFIED when a non-AI oracle fires. Scope is
+    pinned to the base domain so parallel workers stay in bounds.
+    """
+    script = os.path.join(TOOLS_DIR, "swarm.py")
+    if not os.path.isfile(script):
+        log("warn", "swarm.py missing — skip swarm")
+        return False
+    log("info", f"Swarm: fanning out verifiers for {domain} ({workers} workers)...")
+    scope = (_SCOPE_CHECKER.domains if _SCOPE_CHECKER and getattr(_SCOPE_CHECKER, "domains", None)
+             else [domain])
+    scope_args = " ".join(f'--scope-domain "{d}"' for d in scope)
+    ok, out = run_cmd(
+        f'python3 "{script}" "{domain}" --workers {int(workers)} {scope_args}',
+        timeout=1800,
+    )
+    if out.strip():
+        print(out.rstrip())
+    if not ok:
+        log("warn", f"swarm returned non-zero for {domain}")
+    return ok
 
 
 def _tech_pairs_from_recon(domain):
@@ -460,7 +624,7 @@ def run_eol_check(domain):
 
     tech = ",".join(pairs[:20])
     log("info", f"EOL check: {tech}")
-    ok, out = run_cmd(f'python3 "{script}" --tech "{tech}"', timeout=60)
+    ok, out = run_cmd(["python3", script, "--tech", tech], timeout=60)
     if out.strip():
         print(out.rstrip())
     return ok
@@ -468,6 +632,8 @@ def run_eol_check(domain):
 
 def run_graphql_audit(domain):
     """Run graphql_audit.sh against any GraphQL URLs found in recon."""
+    if _scope_blocks_target(domain):
+        return False
     script = os.path.join(TOOLS_DIR, "graphql_audit.sh")
     if not os.path.isfile(script):
         log("warn", "graphql_audit.sh missing")
@@ -544,24 +710,31 @@ def run_graphql_audit(domain):
 
 def run_vuln_scan(domain, quick=False):
     """Run vulnerability scanner on recon results."""
+    if _scope_blocks_target(domain):
+        return False
     recon_dir = os.path.join(RECON_DIR, domain)
     if not os.path.isdir(recon_dir):
         log("err", f"No recon data found for {domain}. Run recon first.")
         return False
 
+    # Re-filter recon output to scope before active scanning reads it (covers
+    # the --scan-only path where run_recon's own filter never ran this session).
+    _filter_recon_scope(domain)
+
     log("info", f"Running vulnerability scanner on {domain}...")
     script = os.path.join(TOOLS_DIR, "vuln_scanner.sh")
-    quick_flag = "--quick" if quick else ""
 
     child_env = os.environ.copy()
     if _AUTH_SESSION is not None:
         _AUTH_SESSION.export_to_env(child_env)
 
+    # argv list + shell=False: recon_dir embeds the user-controlled domain, so a
+    # shell string would be a command-injection vector (domain = 'a";id;"').
+    cmd = ["bash", script, recon_dir]
+    if quick:
+        cmd.append("--quick")
     try:
-        proc = subprocess.Popen(
-            f'bash "{script}" "{recon_dir}" {quick_flag}',
-            shell=True, cwd=BASE_DIR, env=child_env,
-        )
+        proc = subprocess.Popen(cmd, shell=False, cwd=BASE_DIR, env=child_env)
         proc.wait(timeout=1800)
         return proc.returncode == 0
     except subprocess.TimeoutExpired:
@@ -668,6 +841,8 @@ def print_dashboard(results):
 
 def run_cve_hunt(domain):
     """Run focused nuclei CVE sweep via cve_scan.sh."""
+    if _scope_blocks_target(domain):
+        return False
     script = os.path.join(TOOLS_DIR, "cve_scan.sh")
     if not os.path.isfile(script):
         log("warn", "cve_scan.sh missing — use /intel for CVE intelligence")
@@ -678,10 +853,11 @@ def run_cve_hunt(domain):
     if _AUTH_SESSION is not None:
         _AUTH_SESSION.export_to_env(child_env)
 
+    # argv list + shell=False — domain is user-controlled (injection-safe).
     try:
         proc = subprocess.Popen(
-            f'bash "{script}" "{domain}"',
-            shell=True, cwd=BASE_DIR, env=child_env,
+            ["bash", script, domain],
+            shell=False, cwd=BASE_DIR, env=child_env,
         )
         proc.wait(timeout=900)
         return proc.returncode == 0
@@ -693,19 +869,21 @@ def run_cve_hunt(domain):
 
 def run_zero_day_fuzzer(domain, deep=False):
     """Run zero-day fuzzer on a target."""
+    if _scope_blocks_target(domain):
+        return False
     log("info", f"Running zero-day fuzzer on {domain}...")
     script = os.path.join(TOOLS_DIR, "zero_day_fuzzer.py")
-    deep_flag = "--deep" if deep else ""
 
-    # Check if we have recon data with live URLs
+    # argv list + shell=False — domain is user-controlled (injection-safe).
     recon_dir = os.path.join(RECON_DIR, domain)
+    cmd = ["python3", script, f"https://{domain}"]
     if os.path.isdir(recon_dir):
-        cmd = f'python3 "{script}" "https://{domain}" --recon-dir "{recon_dir}" {deep_flag}'
-    else:
-        cmd = f'python3 "{script}" "https://{domain}" {deep_flag}'
+        cmd += ["--recon-dir", recon_dir]
+    if deep:
+        cmd.append("--deep")
 
     try:
-        proc = subprocess.Popen(cmd, shell=True, cwd=BASE_DIR)
+        proc = subprocess.Popen(cmd, shell=False, cwd=BASE_DIR)
         proc.wait(timeout=900)
         return proc.returncode == 0
     except subprocess.TimeoutExpired:
@@ -723,14 +901,30 @@ def hunt_target(
     zero_day=False,
     skip_leads=False,
     graphql=False,
+    swarm=False,
+    swarm_workers=6,
 ):
     """Run the full hunt pipeline on a single target."""
+    try:
+        domain = _validate_target(domain)
+    except ValueError as exc:
+        log("err", str(exc))
+        return {
+            "domain": domain,
+            "success": False,
+            "recon": False,
+            "scan": False,
+            "leads": False,
+            "reports": 0,
+        }
+
     result = {
         "domain": domain,
         "success": True,
         "recon": False,
         "scan": False,
         "leads": False,
+        "swarm": False,
         "reports": 0,
     }
 
@@ -753,6 +947,11 @@ def hunt_target(
         run_graphql_audit(domain)
 
     result["scan"] = run_vuln_scan(domain, quick=quick)
+
+    # Swarm: fan out parallel ephemeral verifiers over the lead board so every
+    # auto-verifiable lead is deterministically confirmed or killed in parallel.
+    if swarm:
+        result["swarm"] = run_swarm(domain, workers=swarm_workers)
 
     # CVE hunting (only when explicitly requested)
     if cve_hunt:
@@ -797,12 +996,38 @@ Examples:
                         help="Run graphql_audit.sh on GraphQL URLs found in recon")
     parser.add_argument("--skip-leads", action="store_true",
                         help="Skip lead_board ingest + EOL check after recon")
+    parser.add_argument("--swarm", action="store_true",
+                        help="After scan, fan out parallel ephemeral verifiers over the "
+                             "lead board (deterministic confirm/kill)")
+    parser.add_argument("--swarm-workers", type=int, default=6,
+                        help="Number of parallel swarm workers (default 6)")
     parser.add_argument("--select-targets", action="store_true", help="Only run target selection")
     parser.add_argument("--top", type=int, default=10, help="Number of targets to select")
     parser.add_argument("--no-banner", action="store_true",
                         help="Suppress the startup banner (useful for CI / piped output)")
+    parser.add_argument("--scope-domain", action="append", default=[],
+                        help="In-scope pattern (host, *.host, host:port, host/path, IP, or CIDR). "
+                             "Repeat or comma-separate. Enables fail-closed scope enforcement: "
+                             "out-of-scope targets are refused and recon URLs are filtered.")
+    parser.add_argument("--scope-exclude", action="append", default=[],
+                        help="Out-of-scope pattern. Repeat or comma-separate.")
     add_cli_args(parser)
     args = parser.parse_args(argv)
+
+    # Install scope enforcement for this CLI process (the one ScopeChecker).
+    def _flatten(vals):
+        out = []
+        for v in vals:
+            out += [p.strip() for p in v.split(",") if p.strip()]
+        return out
+
+    scope_domains = _flatten(args.scope_domain)
+    scope_excludes = _flatten(args.scope_exclude)
+    if scope_domains:
+        try:
+            set_scope_checker(ScopeChecker(scope_domains, excluded_domains=scope_excludes or None))
+        except ScopeError as exc:
+            parser.error(f"unsafe scope configuration: {exc}")
 
     # Build the auth session once. It propagates to every subprocess via
     # BBHUNT_AUTH_HEADERS / BBHUNT_SESSION_ID env vars (set per-call so the
@@ -859,6 +1084,19 @@ Examples:
         log("warn", f"Missing tools: {', '.join(missing[:12])}{'…' if len(missing) > 12 else ''}")
         log("warn", "Run: bash tools/external_arsenal.sh  (or --install-hint <tool>)")
 
+    # Surface scope-enforcement state. A hunt/scan without configured scope is a
+    # deliberate operator choice on this legacy CLI; warn loudly so it is never
+    # silent. The agent and MCP entrypoints remain fail-closed independently.
+    _will_send_traffic = any((
+        args.target, args.recon_only, args.scan_only,
+        args.cve_hunt, args.zero_day, args.select_targets,
+    )) and not args.report_only
+    if _SCOPE_CHECKER is not None:
+        log("info", f"Scope enforcement ON: {', '.join(scope_domains)}")
+    elif _will_send_traffic:
+        log("warn", "Scope enforcement is OFF — no --scope-domain given. Outbound traffic "
+                    "will NOT be scope-filtered. Pass --scope-domain to enforce.")
+
     # Target selection only
     if args.select_targets:
         select_targets(top_n=args.top)
@@ -892,6 +1130,8 @@ Examples:
             zero_day=args.zero_day,
             skip_leads=args.skip_leads,
             graphql=args.graphql,
+            swarm=args.swarm,
+            swarm_workers=args.swarm_workers,
         )
         print_dashboard([result])
         return
@@ -928,6 +1168,8 @@ Examples:
             quick=args.quick,
             skip_leads=args.skip_leads,
             graphql=args.graphql,
+            swarm=args.swarm,
+            swarm_workers=args.swarm_workers,
         )
         results.append(result)
 
